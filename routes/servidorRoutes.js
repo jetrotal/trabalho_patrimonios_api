@@ -59,4 +59,46 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Busca os dados do próprio servidor logado
+router.get('/me', auth, async (req, res) => {
+  try {
+    const servidor = await Servidor.findById(req.user.id)
+        .select('-senha -mfa_secret')
+        .populate('id_setor', 'nome_setor');
+    res.json(servidor);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar perfil' });
+  }
+});
+
+// Atualiza a própria senha
+router.put('/me/senha', auth, async (req, res) => {
+  try {
+    const { senha_atual, nova_senha } = req.body;
+    const servidor = await Servidor.findById(req.user.id);
+    const bcrypt = require('bcrypt');
+    
+    if (!(await bcrypt.compare(senha_atual, servidor.senha))) {
+      return res.status(401).json({ error: 'Sua senha atual está incorreta.' });
+    }
+    
+    servidor.senha = nova_senha;
+    await servidor.save();
+    res.json({ status: 'success', message: 'Senha atualizada com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ativa/Desativa o próprio MFA
+router.put('/me/mfa', auth, async (req, res) => {
+  try {
+    const { is_mfa_ativo } = req.body;
+    await Servidor.findByIdAndUpdate(req.user.id, { is_mfa_ativo });
+    res.json({ status: 'success', message: 'Status do MFA atualizado.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

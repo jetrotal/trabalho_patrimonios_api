@@ -115,4 +115,21 @@ router.get('/', auth, async (req, res, next) => {
   }
 });
 
+// Busca empréstimos ativos do próprio servidor
+router.get('/minhas', auth, async (req, res, next) => {
+  try {
+    const movimentacoes = await Movimentacao.find({
+      rf_cliente: req.user.id,
+      $or: [{ data_hora_retorno: { $exists: false } }, { data_hora_retorno: null }]
+    })
+    .populate('cod_pt', 'cod_pt descricao foto_url')
+    .populate('id_local_destino', 'nome_local')
+    .sort({ data_hora_saida: -1 });
+    
+    res.json(movimentacoes);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

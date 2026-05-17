@@ -61,6 +61,32 @@ router.delete('/:id', auth, rbac(['Administrador']), getPatrimonio, async (req, 
   }
 });
 
+// Busca patrimônios inativados (Lixeira)
+router.get('/inativos/listar', auth, rbac(['Administrador']), async (req, res) => {
+  try {
+    const patrimonios = await Patrimonio.find({ status_ativo: false }).populate('id_local', 'nome_local');
+    res.json(patrimonios);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Restaura patrimônio da Lixeira
+router.put('/:id/restaurar', auth, rbac(['Administrador']), getPatrimonio, async (req, res) => {
+  try {
+    if (res.patrimonio.status_ativo) return res.status(400).json({ message: 'Ativo já está regular.' });
+    
+    res.patrimonio.status_ativo = true;
+    res.patrimonio.is_disponivel = true;
+    res.patrimonio.$locals.user = req.user.id; 
+    
+    await res.patrimonio.save();
+    res.json({ status: 'success', message: 'Patrimônio restaurado com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 async function getPatrimonio(req, res, next) {
   try {
     const isValId = mongoose.Types.ObjectId.isValid(req.params.id);

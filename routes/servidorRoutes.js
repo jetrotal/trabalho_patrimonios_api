@@ -26,7 +26,7 @@ router.post('/', auth, rbac(['Administrador']), async (req, res) => {
     const dadosServidor = { ...req.body };
     let otpauth_url = null;
 
-    // Se o painel mandou ativar MFA, geramos o Secret na hora (Ref. Tela 5)
+    // Se o painel mandou ativar MFA, geramos o Secret na hora
     if (dadosServidor.is_mfa_ativo) {
       const secret = speakeasy.generateSecret({ name: `GestaoPatrimonio (${dadosServidor.rf})` });
       dadosServidor.mfa_secret = secret.base32;
@@ -35,14 +35,56 @@ router.post('/', auth, rbac(['Administrador']), async (req, res) => {
 
     const servidor = await Servidor.create(dadosServidor);
     
-    // Evita devolver a senha pro cliente
     const svrResponse = servidor.toObject();
     delete svrResponse.senha;
     
-    // Devolve a URL do QR Code apenas na resposta de criação
     if (otpauth_url) svrResponse.mfa_setup_url = otpauth_url; 
 
     res.status(201).json(svrResponse);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Atualiza um servidor existente (Apenas Administrador)
+router.put('/:id', auth, rbac(['Administrador']), async (req, res) => {
+  try {
+    const servidor = await Servidor.findById(req.params.id);
+    if (!servidor) {
+      return res.status(404).json({ error: 'Servidor não encontrado' });
+    }
+
+    const dadosAtualizacao = { ...req.body };
+    
+    // Proteção: Nunca alterar o RF (Chave de Login Funcional) por edição comum
+    delete dadosAtualizacao.rf;
+
+    // Se a senha vier vazia do front-end, removemos para não sobrescrever
+    if (!dadosAtualizacao.senha) {
+      delete dadosAtualizacao.senha;
+    }
+
+    let otpauth_url = null;
+
+    // Se o admin reativar o MFA, geramos um novo código
+    if (dadosAtualizacao.is_mfa_ativo === true && !servidor.is_mfa_ativo) {
+      const secret = speakeasy.generateSecret({ name: `GestaoPatrimonio (${servidor.rf})` });
+      dadosAtualizacao.mfa_secret = secret.base32;
+      otpauth_url = secret.otpauth_url;
+    }
+
+    // Usamos Object.assign e .save() para disparar o gatilho de HASH de senha no Model
+    Object.assign(servidor, dadosAtualizacao);
+    await servidor.save();
+
+    const svrResponse = servidor.toObject();
+    delete svrResponse.senha;
+    
+    if (otpauth_url) {
+      svrResponse.mfa_setup_url = otpauth_url; 
+    }
+
+    res.json(svrResponse);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

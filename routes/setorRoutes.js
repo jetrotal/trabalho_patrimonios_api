@@ -14,4 +14,16 @@ router.post('/', auth, rbac(['Administrador']), async (req, res) => {
   catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+router.put('/:id', auth, rbac(['Administrador']), async (req, res) => {
+  try { res.json(await Setor.findByIdAndUpdate(req.params.id, req.body, { new: true })); } 
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.delete('/:id', auth, rbac(['Administrador']), async (req, res) => {
+  try { 
+    await Setor.findByIdAndDelete(req.params.id);
+    res.json({ status: 'success' }); 
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 module.exports = router;

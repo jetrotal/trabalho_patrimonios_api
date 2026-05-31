@@ -106,6 +106,8 @@ router.get('/', auth, async (req, res, next) => {
     const movimentacoes = await Movimentacao.find()
       .populate('cod_pt', 'cod_pt descricao')
       .populate('rf_cliente', 'nome rf')
+      .populate('rf_responsavel_saida', 'nome') 
+      .populate('rf_responsavel_retorno', 'nome')
       .populate('id_local_destino', 'nome_local')
       .sort({ data_hora_saida: -1 });
     

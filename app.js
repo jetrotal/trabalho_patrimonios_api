@@ -51,9 +51,6 @@ db.on('error', console.error.bind(console, 'Erro de conexão ao MongoDB:'));
 db.once('open', () => console.log('Conectado ao MongoDB Atlas/Local!'));
 
 const PORT = process.env.PORT || 3000;
-
-if (require.main === module) {
-  app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-}
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 module.exports = app;

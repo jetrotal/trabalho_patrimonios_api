@@ -20,25 +20,34 @@ router.get('/', auth, async (req, res) => {
         const indisponiveis = await Patrimonio.countDocuments({ is_disponivel: false, status_ativo: true });
         const emManutencao = Math.max(0, indisponiveis - emprestados);
 
-        // Mapa Geolocation
-        const mapaLocalidades = await Localidade.aggregate([
-            {
-                $lookup: {
-                    from: 'patrimonios',
-                    localField: '_id',
-                    foreignField: 'id_local',
-                    as: 'patrimonios_alocados'
-                }
-            },
-            {
-                $project: {
-                    nome_local: 1,
-                    latitude: 1,
-                    longitude: 1,
-                    quantidade_ativos: { $size: "$patrimonios_alocados" }
-                }
-            }
+        const localidades = await Localidade.find().lean();
+        
+        const disponiveisAgrupados = await Patrimonio.aggregate([
+            { $match: { status_ativo: true, is_disponivel: true } },
+            { $group: { _id: "$id_local", count: { $sum: 1 } } }
         ]);
+
+        const emprestadosAgrupados = await Movimentacao.aggregate([
+            { $match: { $or: [{ data_hora_retorno: { $exists: false } }, { data_hora_retorno: null }] } },
+            { $group: { _id: "$id_local_destino", count: { $sum: 1 } } }
+        ]);
+
+        const dispMap = {};
+        disponiveisAgrupados.forEach(d => { if(d._id) dispMap[d._id.toString()] = d.count; });
+        
+        const empMap = {};
+        emprestadosAgrupados.forEach(e => { if(e._id) empMap[e._id.toString()] = e.count; });
+
+        const mapaLocalidades = localidades.map(loc => {
+            const locId = loc._id.toString();
+            const disp = dispMap[locId] || 0;
+            const emp = empMap[locId] || 0;
+
+            return {
+                ...loc,
+                quantidade_ativos: disp + emp
+            };
+        });
 
         res.json({
             indicadores: {

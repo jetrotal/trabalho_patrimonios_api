@@ -9,13 +9,23 @@ router.get('/', auth, async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/', auth, rbac(['Administrador']), async (req, res) => {
-  try { res.status(201).json(await Localidade.create(req.body)); } 
+router.post('/', auth, rbac(['Administrador', 'Gerente']), async (req, res) => { 
+  try { 
+    if (req.user.perfil === 'Gerente') {
+          req.body.id_setor = req.user.id_setor;
+      }
+      res.status(201).json(await Localidade.create(req.body)); 
+  } 
   catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-router.put('/:id', auth, rbac(['Administrador']), async (req, res) => {
-  try { res.json(await Localidade.findByIdAndUpdate(req.params.id, req.body, { new: true })); } 
+router.put('/:id', auth, rbac(['Administrador', 'Gerente']), async (req, res) => {
+  try { 
+    if (req.user.perfil === 'Gerente') {
+          req.body.id_setor = req.user.id_setor;
+      }
+      res.json(await Localidade.findByIdAndUpdate(req.params.id, req.body, { new: true })); 
+  } 
   catch (err) { res.status(400).json({ error: err.message }); }
 });
 

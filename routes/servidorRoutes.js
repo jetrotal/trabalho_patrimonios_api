@@ -20,13 +20,16 @@ router.post('/setup', async (req, res) => {
   }
 });
 
-// Apenas 'Administrador' pode criar ou gerenciar servidores
-router.post('/', auth, rbac(['Administrador']), async (req, res) => {
+router.post('/', auth, rbac(['Administrador', 'Gerente']), async (req, res) => {
   try {
     const dadosServidor = { ...req.body };
     let otpauth_url = null;
 
-    // Se o painel mandou ativar MFA, geramos o Secret na hora
+    if (req.user.perfil === 'Gerente') {
+        dadosServidor.id_setor = req.user.id_setor; 
+        dadosServidor.perfil = 'Servidor Comum';    
+    }
+
     if (dadosServidor.is_mfa_ativo) {
       const secret = speakeasy.generateSecret({ name: `GestaoPatrimonio (${dadosServidor.rf})` });
       dadosServidor.mfa_secret = secret.base32;
@@ -34,10 +37,8 @@ router.post('/', auth, rbac(['Administrador']), async (req, res) => {
     }
 
     const servidor = await Servidor.create(dadosServidor);
-    
     const svrResponse = servidor.toObject();
     delete svrResponse.senha;
-    
     if (otpauth_url) svrResponse.mfa_setup_url = otpauth_url; 
 
     res.status(201).json(svrResponse);
@@ -46,43 +47,47 @@ router.post('/', auth, rbac(['Administrador']), async (req, res) => {
   }
 });
 
-// Atualiza um servidor existente (Apenas Administrador)
-router.put('/:id', auth, rbac(['Administrador']), async (req, res) => {
+router.put('/:id', auth, rbac(['Administrador', 'Gerente']), async (req, res) => {
   try {
     const servidor = await Servidor.findById(req.params.id);
     if (!servidor) {
       return res.status(404).json({ error: 'Servidor não encontrado' });
     }
 
-    const dadosAtualizacao = { ...req.body };
-    
-    // Proteção: Nunca alterar o RF (Chave de Login Funcional) por edição comum
-    delete dadosAtualizacao.rf;
+    if (req.user.perfil === 'Gerente') {
+        if (servidor.perfil !== 'Servidor Comum') {
+            return res.status(403).json({ error: 'Gerentes só têm permissão para editar Servidores Comuns.' });
+        }
+        if (servidor.id_setor && servidor.id_setor.toString() !== req.user.id_setor) {
+            return res.status(403).json({ error: 'Este servidor pertence a outro setor.' });
+        }
+    }
 
-    // Se a senha vier vazia do front-end, removemos para não sobrescrever
+    const dadosAtualizacao = { ...req.body };
+    delete dadosAtualizacao.rf;
     if (!dadosAtualizacao.senha) {
       delete dadosAtualizacao.senha;
     }
 
+    if (req.user.perfil === 'Gerente') {
+        dadosAtualizacao.perfil = 'Servidor Comum';
+        dadosAtualizacao.id_setor = req.user.id_setor;
+    }
+
     let otpauth_url = null;
 
-    // Se o admin reativar o MFA, geramos um novo código
     if (dadosAtualizacao.is_mfa_ativo === true && !servidor.is_mfa_ativo) {
       const secret = speakeasy.generateSecret({ name: `GestaoPatrimonio (${servidor.rf})` });
       dadosAtualizacao.mfa_secret = secret.base32;
       otpauth_url = secret.otpauth_url;
     }
 
-    // Usamos Object.assign e .save() para disparar o gatilho de HASH de senha no Model
     Object.assign(servidor, dadosAtualizacao);
     await servidor.save();
 
     const svrResponse = servidor.toObject();
     delete svrResponse.senha;
-    
-    if (otpauth_url) {
-      svrResponse.mfa_setup_url = otpauth_url; 
-    }
+    if (otpauth_url) svrResponse.mfa_setup_url = otpauth_url; 
 
     res.json(svrResponse);
   } catch (err) {
@@ -92,7 +97,12 @@ router.put('/:id', auth, rbac(['Administrador']), async (req, res) => {
 
 router.get('/', auth, async (req, res) => {
   try {
-    const servidores = await Servidor.find()
+    let filter = {};
+    if (req.user.perfil === 'Gerente' && req.user.id_setor) {
+        filter.id_setor = req.user.id_setor;
+    }
+
+    const servidores = await Servidor.find(filter)
       .select('-senha -mfa_secret')
       .populate('id_setor', 'nome_setor');
     res.json(servidores);
@@ -101,7 +111,6 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Busca os dados do próprio servidor logado
 router.get('/me', auth, async (req, res) => {
   try {
     const servidor = await Servidor.findById(req.user.id)
@@ -113,7 +122,6 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-// Atualiza a própria senha
 router.put('/me/senha', auth, async (req, res) => {
   try {
     const { senha_atual, nova_senha } = req.body;
@@ -132,7 +140,6 @@ router.put('/me/senha', auth, async (req, res) => {
   }
 });
 
-// Ativa/Desativa o próprio MFA
 router.put('/me/mfa', auth, async (req, res) => {
   try {
     const { is_mfa_ativo } = req.body;

@@ -37,7 +37,13 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: servidor._id, rf: servidor.rf, nome: servidor.nome, perfil: servidor.perfil },
+      { 
+        id: servidor._id, 
+        rf: servidor.rf, 
+        nome: servidor.nome, 
+        perfil: servidor.perfil,
+        id_setor: servidor.id_setor
+      },
       process.env.JWT_SECRET || 'chave-secreta-padrao',
       { expiresIn: '8h' }
     );

@@ -53,4 +53,8 @@ db.once('open', () => console.log('Conectado ao MongoDB Atlas/Local!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
+app.get('/ping', (req, res) => {
+    res.status(200).send('Servidor acordado!');
+});
+
 module.exports = app;

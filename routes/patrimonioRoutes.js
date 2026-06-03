@@ -49,7 +49,12 @@ router.post('/', auth, rbac(['Administrador', 'Gerente']), async (req, res) => {
 
 router.put('/:id', auth, rbac(['Administrador', 'Gerente']), getPatrimonio, async (req, res) => {
   
-  if (!res.patrimonio.is_disponivel) {
+  const emprestimoAberto = await Movimentacao.findOne({
+      cod_pt: res.patrimonio._id,
+      $or: [{ data_hora_retorno: { $exists: false } }, { data_hora_retorno: null }]
+  });
+
+  if (emprestimoAberto) {
       return res.status(400).json({ message: 'Edição bloqueada. Este patrimônio encontra-se emprestado/em uso no momento.' });
   }
 
@@ -69,7 +74,15 @@ router.put('/:id', auth, rbac(['Administrador', 'Gerente']), getPatrimonio, asyn
 router.delete('/:id', auth, rbac(['Administrador']), getPatrimonio, async (req, res, next) => {
   try {
     if (!res.patrimonio.status_ativo) return res.status(400).json({ error: 'Este patrimônio já foi inativado.' });
-    if (!res.patrimonio.is_disponivel) return res.status(400).json({ error: 'Não é possível excluir um patrimônio que está emprestado ou indisponível.' });
+    
+    const emprestimoAberto = await Movimentacao.findOne({
+        cod_pt: res.patrimonio._id,
+        $or: [{ data_hora_retorno: { $exists: false } }, { data_hora_retorno: null }]
+    });
+
+    if (emprestimoAberto) {
+        return res.status(400).json({ error: 'Não é possível excluir um patrimônio que está emprestado para um servidor no momento.' });
+    }
 
     res.patrimonio.status_ativo = false;
     res.patrimonio.is_disponivel = false; 
